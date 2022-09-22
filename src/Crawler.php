@@ -45,8 +45,11 @@ class Crawler
         if (stripos($googleDomain, 'google.') === false || stripos($googleDomain, 'http') === 0) {
             throw new \InvalidArgumentException('Invalid google domain');
         }
-        
-        $googleUrl = $this->getGoogleUrl($searchTerm, $googleDomain, $countryCode);
+
+        $googleUrl = "https://$googleDomain/search?q={$searchTerm}&num=100";
+        if (!empty($countryCode)) {
+            $googleUrl .= "&gl={$countryCode}";
+        }
         $response = $this->proxy->getHttpResponse($googleUrl);
         $stringResponse = (string) $response->getBody();
         $domCrawler = new DomCrawler($stringResponse);
@@ -114,29 +117,6 @@ class Crawler
         return $this->proxy->parseUrl($url);
     }
 
-    /**
-     * Assembles the Google URL using the previously informed data
-     */
-    private function getGoogleUrl(SearchTermInterface $searchTerm, string $googleDomain, string $countryCode): string
-    {
-        $domain = $googleDomain;
-        $url = "https://$domain/search?q={$searchTerm}&num=100";
-        if (!empty($countryCode)) {
-            $url .= "&gl={$countryCode}";
-        }
-
-        return $url;
-    }
-
-    private function isImageSuggestion(DomCrawler $resultCrawler)
-    {
-        $resultCount = $resultCrawler
-            ->filterXpath('//img')
-            ->count();
-
-        return $resultCount > 0;
-    }
-
     private function parseDomElement(DOMElement $result): Result
     {
         $resultCrawler = new DomCrawler($result);
@@ -152,7 +132,8 @@ class Crawler
             throw new InvalidResultException('Description element not found');
         }
 
-        if ($this->isImageSuggestion($resultCrawler)) {
+        $isImageSuggestion = $resultCrawler->filterXpath('//img')->count() > 0;
+        if ($isImageSuggestion) {
             throw new InvalidResultException('Result is an image suggestion');
         }
 
@@ -160,7 +141,6 @@ class Crawler
             throw new InvalidResultException('Result is a google suggestion');
         }
 
-        $googleResult = $this->createResult($resultLink, $descriptionElement);
-        return $googleResult;
+        return $this->createResult($resultLink, $descriptionElement);
     }
 }
