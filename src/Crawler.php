@@ -20,47 +20,37 @@ class Crawler
 {
     /** @var GoogleProxyInterface $proxy */
     protected $proxy;
-    /** @var SearchTermInterface $searchTerm */
-    private $searchTerm;
-    /** @var string $countrySpecificSuffix */
-    private $googleDomain;
-    /** @var string $countryCode */
-    private $countryCode;
 
     public function __construct(
-        SearchTermInterface $searchTerm,
-        GoogleProxyInterface $proxy = null,
-        string $googleDomain = 'google.com',
-        string $countryCode = ''
+        GoogleProxyInterface $proxy = null
     ) {
-        $this->proxy = is_null($proxy) ? new NoProxy() : $proxy;
-        $this->searchTerm = $searchTerm;
-
-        if (stripos($googleDomain, 'google.') === false || stripos($googleDomain, 'http') === 0) {
-            throw new \InvalidArgumentException('Invalid google domain');
-        }
-        $this->googleDomain = $googleDomain;
-
-        $this->countryCode = strtoupper($countryCode);
+        $this->proxy = $proxy ?? new NoProxy();
     }
 
     /**
      * Returns the 100 first found results for the specified search term
-     *
+     * 
+     * @param SearchTermInterface $searchTerm
+     * @param string $googleDomain
+     * @param string $countryCode
      * @return ResultList
      * @throws \GuzzleHttp\Exception\ServerException If the proxy was overused
      * @throws \GuzzleHttp\Exception\ConnectException If the proxy is unavailable or $countrySpecificSuffix is invalid
      */
-    public function getResults(): ResultList
-    {
-        $googleUrl = $this->getGoogleUrl();
+    public function getResults(
+            SearchTermInterface $searchTerm, 
+            string $googleDomain = 'google.com', 
+            string $countryCode = ''
+        ): ResultList {
+        if (stripos($googleDomain, 'google.') === false || stripos($googleDomain, 'http') === 0) {
+            throw new \InvalidArgumentException('Invalid google domain');
+        }
+        
+        $googleUrl = $this->getGoogleUrl($searchTerm, $googleDomain, $countryCode);
         $response = $this->proxy->getHttpResponse($googleUrl);
         $stringResponse = (string) $response->getBody();
         $domCrawler = new DomCrawler($stringResponse);
-        $googleResultList = $domCrawler->filterXPath('//div[@class="ZINbbc xpd O9g5cc uUPGi"]');
-        if ($googleResultList->count() === 0) {
-            throw new InvalidGoogleHtmlException('No parseable element found');
-        }
+        $googleResultList = $this->createGoogleResultList($domCrawler);
 
         $resultList = new ResultList($googleResultList->count());
 
@@ -78,6 +68,16 @@ class Crawler
         }
 
         return $resultList;
+    }
+
+    private function createGoogleResultList (DomCrawler $domCrawler): DomCrawler
+    {
+        $googleResultList = $domCrawler->filterXPath('//div[@class="Gx5Zad fP1Qef xpd EtOod pkphOe"]');
+        if ($googleResultList->count() === 0) {
+            throw new InvalidGoogleHtmlException('No parseable element found');
+        }
+
+        return $googleResultList;
     }
 
     /**
@@ -117,12 +117,12 @@ class Crawler
     /**
      * Assembles the Google URL using the previously informed data
      */
-    private function getGoogleUrl(): string
+    private function getGoogleUrl(SearchTermInterface $searchTerm, string $googleDomain, string $countryCode): string
     {
-        $domain = $this->googleDomain;
-        $url = "https://$domain/search?q={$this->searchTerm}&num=100";
-        if (!empty($this->countryCode)) {
-            $url .= "&gl={$this->countryCode}";
+        $domain = $googleDomain;
+        $url = "https://$domain/search?q={$searchTerm}&num=100";
+        if (!empty($countryCode)) {
+            $url .= "&gl={$countryCode}";
         }
 
         return $url;
