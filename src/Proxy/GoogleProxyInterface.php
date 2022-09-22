@@ -30,5 +30,5 @@ interface GoogleProxyInterface
      * @return string
      * @throws InvalidResultException
      */
-    public function parseUrl(string $url): string;
+    public function parseUrl(string $googleUrl): string;
 }
